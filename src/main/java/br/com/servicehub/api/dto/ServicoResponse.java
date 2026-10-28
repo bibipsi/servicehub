@@ -32,6 +32,10 @@ public record ServicoResponse(
         @Schema(description = "Indica se o serviço está disponível para contratação", example = "true")
         Boolean ativo,
 
+        @Schema(description = "Identificador do prestador responsável pelo serviço "
+                + "(nulo para serviços cadastrados antes da autenticação)", example = "2")
+        Long prestadorId,
+
         @Schema(description = "Data e hora de cadastro", example = "2026-09-22T10:15:30")
         LocalDateTime criadoEm,
 
@@ -48,6 +52,7 @@ public record ServicoResponse(
                 servico.getDuracaoMinutos(),
                 servico.getCategoria(),
                 servico.getAtivo(),
+                servico.getPrestador() == null ? null : servico.getPrestador().getId(),
                 servico.getCriadoEm(),
                 servico.getAtualizadoEm()
         );
