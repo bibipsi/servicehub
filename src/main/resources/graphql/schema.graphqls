@@ -1,0 +1,30 @@
+"Consultas públicas do catálogo de serviços"
+type Query {
+    "Lista os serviços cadastrados, opcionalmente filtrando pela categoria"
+    servicos(categoria: CategoriaServico): [Servico!]!
+
+    "Busca um serviço pelo identificador"
+    servico(id: ID!): Servico
+}
+
+enum CategoriaServico {
+    LIMPEZA
+    MANUTENCAO
+    TECNOLOGIA
+    CONSULTORIA
+    BELEZA
+    OUTROS
+}
+
+type Servico {
+    id: ID!
+    nome: String!
+    descricao: String
+    preco: Float!
+    duracaoMinutos: Int!
+    categoria: CategoriaServico!
+    ativo: Boolean!
+    prestadorId: ID
+    criadoEm: String!
+    atualizadoEm: String!
+}

@@ -50,6 +50,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/cadastro").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/servicos", "/api/servicos/**").permitAll()
+                        .requestMatchers("/graphql", "/graphiql/**").permitAll()
                         .requestMatchers(ROTAS_DOCUMENTACAO).permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
