@@ -3,18 +3,37 @@ services:
     image: postgres:17
     container_name: servicehub-postgres
     environment:
-      POSTGRES_DB: servicehub
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-servicehub}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d servicehub"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 12
     volumes:
       - servicehub-data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    container_name: servicehub-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # "postgres" é o nome do serviço acima, resolvido pela rede interna do Compose
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-servicehub}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env (veja .env.example)}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1h}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    restart: unless-stopped
 
 volumes:
   servicehub-data:
