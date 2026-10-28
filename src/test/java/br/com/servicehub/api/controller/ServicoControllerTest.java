@@ -1,12 +1,18 @@
 package br.com.servicehub.api.controller;
 
+import br.com.servicehub.api.entity.PapelUsuario;
+import br.com.servicehub.api.entity.Usuario;
 import br.com.servicehub.api.repository.ServicoRepository;
+import br.com.servicehub.api.repository.UsuarioRepository;
+import br.com.servicehub.api.security.JwtService;
+import br.com.servicehub.api.support.AutenticacaoTestHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -42,14 +48,29 @@ class ServicoControllerTest {
     @Autowired
     private ServicoRepository servicoRepository;
 
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtService jwtService;
+
+    private AutenticacaoTestHelper auth;
+    private Usuario prestador;
+
+    // Desde a aula 08, as operações de escrita exigem um usuário PROVIDER ou ADMIN autenticado
     @BeforeEach
     void limparBanco() {
-        servicoRepository.deleteAll();
+        auth = new AutenticacaoTestHelper(usuarioRepository, servicoRepository, passwordEncoder, jwtService);
+        auth.limparBanco();
+        prestador = auth.criarUsuario("prestador@servicehub.com", PapelUsuario.PROVIDER);
     }
 
     @Test
     void deveExecutarCrudCompleto() throws Exception {
-        MvcResult criado = mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
+        MvcResult criado = mockMvc.perform(post(URL).with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$.id").isNumber())
@@ -67,17 +88,17 @@ class ServicoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
 
-        mockMvc.perform(put(urlServico).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(put(urlServico).with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON)
                         .content(SERVICO_VALIDO.replace("350.00", "420.00")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.preco").value(420.00));
 
-        mockMvc.perform(patch(urlServico + "/status").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(patch(urlServico + "/status").with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"ativo\": false }"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ativo").value(false));
 
-        mockMvc.perform(delete(urlServico))
+        mockMvc.perform(delete(urlServico).with(auth.bearer(prestador)))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get(urlServico))
@@ -87,7 +108,7 @@ class ServicoControllerTest {
 
     @Test
     void deveRetornar400QuandoDadosInvalidos() throws Exception {
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post(URL).with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"nome\": \"\", \"preco\": 0, \"duracaoMinutos\": 0 }"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.campos").isArray());
@@ -95,7 +116,7 @@ class ServicoControllerTest {
 
     @Test
     void deveRetornar400QuandoJsonMalFormado() throws Exception {
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("{ nome: "))
+        mockMvc.perform(post(URL).with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON).content("{ nome: "))
                 .andExpect(status().isBadRequest());
     }
 
@@ -107,19 +128,19 @@ class ServicoControllerTest {
 
     @Test
     void deveRetornar404AoAtualizarOuExcluirInexistente() throws Exception {
-        mockMvc.perform(put(URL + "/999").contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
+        mockMvc.perform(put(URL + "/999").with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(delete(URL + "/999"))
+        mockMvc.perform(delete(URL + "/999").with(auth.bearer(prestador)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void deveRetornar409QuandoNomeDuplicado() throws Exception {
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
+        mockMvc.perform(post(URL).with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
+        mockMvc.perform(post(URL).with(auth.bearer(prestador)).contentType(MediaType.APPLICATION_JSON).content(SERVICO_VALIDO))
                 .andExpect(status().isConflict());
     }
 

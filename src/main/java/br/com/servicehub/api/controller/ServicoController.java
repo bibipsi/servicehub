@@ -1,10 +1,12 @@
 package br.com.servicehub.api.controller;
 
+import br.com.servicehub.api.config.OpenApiConfig;
 import br.com.servicehub.api.dto.ServicoRequest;
 import br.com.servicehub.api.dto.ServicoResponse;
 import br.com.servicehub.api.dto.ServicoStatusRequest;
 import br.com.servicehub.api.entity.CategoriaServico;
 import br.com.servicehub.api.exception.ErroResponse;
+import br.com.servicehub.api.security.UsuarioAutenticado;
 import br.com.servicehub.api.service.ServicoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,11 +16,14 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -90,10 +95,13 @@ public class ServicoController {
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('PROVIDER', 'ADMIN')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(
             summary = "Cadastrar serviço",
             description = "Cadastra um novo serviço no catálogo. O nome deve ser único e o serviço é criado como ativo. "
-                    + "Retorna o serviço criado e o header Location com a URL do novo recurso."
+                    + "Retorna o serviço criado e o header Location com a URL do novo recurso. "
+                    + "Requer o papel PROVIDER ou ADMIN; o usuário autenticado é registrado como prestador do serviço."
     )
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Dados do serviço a ser cadastrado",
@@ -107,12 +115,17 @@ public class ServicoController {
             @ApiResponse(responseCode = "400", description = "Dados inválidos",
                     content = @Content(schema = @Schema(implementation = ErroResponse.class),
                             examples = @ExampleObject(value = EXEMPLO_ERRO_VALIDACAO))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, inválido ou expirado",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário sem o papel PROVIDER ou ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
             @ApiResponse(responseCode = "409", description = "Já existe um serviço com o mesmo nome",
                     content = @Content(schema = @Schema(implementation = ErroResponse.class),
                             examples = @ExampleObject(value = EXEMPLO_ERRO_CONFLITO)))
     })
-    public ResponseEntity<ServicoResponse> criar(@Valid @RequestBody ServicoRequest request) {
-        ServicoResponse criado = servicoService.criar(request);
+    public ResponseEntity<ServicoResponse> criar(@Valid @RequestBody ServicoRequest request,
+                                                 @Parameter(hidden = true) @AuthenticationPrincipal UsuarioAutenticado usuario) {
+        ServicoResponse criado = servicoService.criar(request, usuario);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(criado.id())
@@ -157,9 +170,12 @@ public class ServicoController {
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('PROVIDER', 'ADMIN')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(
             summary = "Atualizar serviço",
-            description = "Atualiza todos os dados de um serviço existente. Todos os campos obrigatórios devem ser enviados."
+            description = "Atualiza todos os dados de um serviço existente. Todos os campos obrigatórios devem ser enviados. "
+                    + "Permitido apenas ao prestador responsável pelo serviço ou a um ADMIN."
     )
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Novos dados do serviço",
@@ -184,20 +200,28 @@ public class ServicoController {
             @ApiResponse(responseCode = "404", description = "Serviço não encontrado",
                     content = @Content(schema = @Schema(implementation = ErroResponse.class),
                             examples = @ExampleObject(value = EXEMPLO_ERRO_NAO_ENCONTRADO))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, inválido ou expirado",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o prestador do serviço nem ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
             @ApiResponse(responseCode = "409", description = "Já existe outro serviço com o mesmo nome",
                     content = @Content(schema = @Schema(implementation = ErroResponse.class)))
     })
     public ResponseEntity<ServicoResponse> atualizar(
             @Parameter(description = "ID do serviço", example = "1") @PathVariable Long id,
-            @Valid @RequestBody ServicoRequest request) {
-        return ResponseEntity.ok(servicoService.atualizar(id, request));
+            @Valid @RequestBody ServicoRequest request,
+            @Parameter(hidden = true) @AuthenticationPrincipal UsuarioAutenticado usuario) {
+        return ResponseEntity.ok(servicoService.atualizar(id, request, usuario));
     }
 
     @PatchMapping(value = "/{id}/status", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('PROVIDER', 'ADMIN')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(
             summary = "Ativar ou desativar serviço",
             description = "Altera apenas o status do serviço. Serviços inativos continuam cadastrados, "
-                    + "mas não devem ser oferecidos para contratação."
+                    + "mas não devem ser oferecidos para contratação. "
+                    + "Permitido apenas ao prestador responsável pelo serviço ou a um ADMIN."
     )
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "Novo status do serviço",
@@ -210,30 +234,43 @@ public class ServicoController {
                     content = @Content(schema = @Schema(implementation = ServicoResponse.class))),
             @ApiResponse(responseCode = "400", description = "Dados inválidos",
                     content = @Content(schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Token ausente, inválido ou expirado",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o prestador do serviço nem ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
             @ApiResponse(responseCode = "404", description = "Serviço não encontrado",
                     content = @Content(schema = @Schema(implementation = ErroResponse.class),
                             examples = @ExampleObject(value = EXEMPLO_ERRO_NAO_ENCONTRADO)))
     })
     public ResponseEntity<ServicoResponse> alterarStatus(
             @Parameter(description = "ID do serviço", example = "1") @PathVariable Long id,
-            @Valid @RequestBody ServicoStatusRequest request) {
-        return ResponseEntity.ok(servicoService.alterarStatus(id, request.ativo()));
+            @Valid @RequestBody ServicoStatusRequest request,
+            @Parameter(hidden = true) @AuthenticationPrincipal UsuarioAutenticado usuario) {
+        return ResponseEntity.ok(servicoService.alterarStatus(id, request.ativo(), usuario));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('PROVIDER', 'ADMIN')")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(
             summary = "Excluir serviço",
-            description = "Remove definitivamente um serviço do catálogo."
+            description = "Remove definitivamente um serviço do catálogo. "
+                    + "Permitido apenas ao prestador responsável pelo serviço ou a um ADMIN."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Serviço excluído com sucesso", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token ausente, inválido ou expirado",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário não é o prestador do serviço nem ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
             @ApiResponse(responseCode = "404", description = "Serviço não encontrado",
                     content = @Content(schema = @Schema(implementation = ErroResponse.class),
                             examples = @ExampleObject(value = EXEMPLO_ERRO_NAO_ENCONTRADO)))
     })
     public ResponseEntity<Void> excluir(
-            @Parameter(description = "ID do serviço", example = "1") @PathVariable Long id) {
-        servicoService.excluir(id);
+            @Parameter(description = "ID do serviço", example = "1") @PathVariable Long id,
+            @Parameter(hidden = true) @AuthenticationPrincipal UsuarioAutenticado usuario) {
+        servicoService.excluir(id, usuario);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }

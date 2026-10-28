@@ -1,6 +1,7 @@
 package br.com.servicehub.api.dto;
 
 import br.com.servicehub.api.entity.CategoriaServico;
+import br.com.servicehub.api.validation.SemHtml;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -19,12 +20,14 @@ public record ServicoRequest(
                 requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
         @NotBlank(message = "O nome é obrigatório")
         @Size(min = 3, max = 100, message = "O nome deve ter entre 3 e 100 caracteres")
+        @SemHtml(message = "O nome não pode conter os caracteres < e >")
         String nome,
 
         @Schema(description = "Descrição detalhada do serviço",
                 example = "Instalação completa de aparelho split até 12.000 BTUs, incluindo suporte e tubulação de até 3 metros.",
                 maxLength = 500)
         @Size(max = 500, message = "A descrição deve ter no máximo 500 caracteres")
+        @SemHtml(message = "A descrição não pode conter os caracteres < e >")
         String descricao,
 
         @Schema(description = "Preço do serviço em reais", example = "350.00",
